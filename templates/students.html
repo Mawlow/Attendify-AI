@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Students | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Enrollment</p>
+        <h1>Students</h1>
+        <p class="muted">Register students using five guided face poses for more reliable recognition.</p>
+    </div>
+</section>
+
+<div class="students-page-stack">
+    <section class="card students-enroll-card">
+        <h2>Enroll Student</h2>
+        <form class="form form-enroll" method="post" action="{{ url_for('students') }}" id="student-form">
+            <div class="enroll-hiddens">
+                <input type="hidden" name="image_pose_front" id="student-pose-front" value="">
+                <input type="hidden" name="image_pose_left" id="student-pose-left" value="">
+                <input type="hidden" name="image_pose_right" id="student-pose-right" value="">
+                <input type="hidden" name="image_pose_down" id="student-pose-down" value="">
+                <input type="hidden" name="image_pose_up" id="student-pose-up" value="">
+            </div>
+
+            <div class="enroll-layout">
+                <div class="enroll-fields">
+                    <label>
+                        Student Number
+                        <input type="text" name="student_number" required placeholder="2026-0001">
+                    </label>
+                    <label>
+                        Full Name
+                        <input type="text" name="full_name" required placeholder="Juan Dela Cruz">
+                    </label>
+                    <label>
+                        Course
+                        <input type="text" name="course" placeholder="BSIT">
+                    </label>
+                    <label>
+                        Year and Section
+                        <input type="text" name="year_section" placeholder="3A">
+                    </label>
+                    <label>
+                        Email
+                        <input type="email" name="email" placeholder="student@example.com">
+                    </label>
+                </div>
+                <div class="enroll-camera">
+                    <div class="camera-panel">
+                        <p class="pose-phase-label" id="student-pose-phase">Step 1 of 5</p>
+                        <h3 class="pose-instruction-title" id="student-pose-title">Front</h3>
+                        <p class="pose-instruction-hint" id="student-pose-hint">
+                            Face the camera straight on.
+                        </p>
+                        <ol class="pose-step-list" id="student-pose-steps" aria-label="Enrollment capture steps">
+                            <li data-pose-index="0"><span class="pose-step-num">1</span> Front</li>
+                            <li data-pose-index="1"><span class="pose-step-num">2</span> Left</li>
+                            <li data-pose-index="2"><span class="pose-step-num">3</span> Right</li>
+                            <li data-pose-index="3"><span class="pose-step-num">4</span> Look down</li>
+                            <li data-pose-index="4"><span class="pose-step-num">5</span> Look up</li>
+                        </ol>
+                        <video id="student-video" autoplay playsinline></video>
+                        <canvas id="student-canvas" class="hidden"></canvas>
+                        <div class="camera-actions">
+                            <button class="button" type="button" id="start-student-camera">Start Camera</button>
+                            <button class="button primary" type="button" id="capture-student-pose">Capture this pose</button>
+                            <button class="button ghost" type="button" id="retake-student-pose">Retake this pose</button>
+                        </div>
+                        <p class="muted" id="student-capture-status">Start the camera, then capture each pose in order.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="enroll-submit">
+                <button class="button primary" type="submit">Save Student</button>
+            </div>
+        </form>
+    </section>
+
+    <hr class="section-divider" aria-hidden="true">
+
+    <section class="card students-list-card">
+        <div class="section-heading">
+            <div>
+                <h2>Enrolled Students</h2>
+                <p class="muted">{{ students|length }} student(s) enrolled.</p>
+            </div>
+        </div>
+
+        {% if students %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Course / Section</th>
+                            <th>Dataset</th>
+                            <th>Email</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr>
+                                <td>
+                                    <strong>{{ student.full_name }}</strong>
+                                    <span>{{ student.student_number }}</span>
+                                </td>
+                                <td>{{ student.course }} {{ student.year_section }}</td>
+                                <td>
+                                    <span class="dataset-count {{ 'ready' if student.dataset_ready else 'needs-samples' }}">
+                                        {{ student.dataset_samples }} sample(s)
+                                    </span>
+                                </td>
+                                <td>{{ student.email }}</td>
+                                <td>
+                                    <form method="post" action="{{ url_for('delete_student', student_id=student.id) }}" onsubmit="return confirm('Delete this student?');">
+                                        <button class="link-danger" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty">No students have been enrolled yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

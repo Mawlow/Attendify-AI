@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Dataset | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Training Data</p>
+        <h1>Dataset Registration</h1>
+        <p class="muted">Add multiple face samples per student to make recognition more accurate.</p>
+    </div>
+</section>
+
+<section class="stats-grid">
+    <article class="card stat-card">
+        <span>Students</span>
+        <strong>{{ students|length }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span>Total Samples</span>
+        <strong>{{ total_samples }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span>Model Status</span>
+        <strong>{{ "Ready" if model_exists else "Not Trained" }}</strong>
+    </article>
+</section>
+
+<section class="grid two-columns">
+    <article class="card">
+        <h2>Add Dataset Sample</h2>
+        <p class="muted">Recommended: capture 10 to 20 samples per student in different angles and lighting.</p>
+
+        <form class="form" method="post" action="{{ url_for('dataset') }}" id="dataset-form">
+            <label>
+                Student
+                <select name="student_id" required>
+                    <option value="">Select a student</option>
+                    {% for student in students %}
+                        <option value="{{ student.id }}">
+                            {{ student.full_name }} - {{ student.student_number }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <input type="hidden" name="image_data" id="dataset-image-data">
+
+            <div class="camera-panel">
+                <video id="dataset-video" autoplay playsinline></video>
+                <canvas id="dataset-canvas" class="hidden"></canvas>
+                <div class="camera-actions">
+                    <button class="button" type="button" id="start-dataset-camera">Start Camera</button>
+                    <button class="button" type="button" id="capture-dataset-face">Capture Sample</button>
+                </div>
+                <p class="muted" id="dataset-capture-status">No dataset sample captured yet.</p>
+            </div>
+
+            <button class="button primary" type="submit">Save Sample and Retrain</button>
+        </form>
+    </article>
+
+    <article class="card">
+        <div class="section-heading">
+            <div>
+                <h2>Dataset Progress</h2>
+                <p class="muted">Students with 10 or more samples are marked ready.</p>
+            </div>
+            <form method="post" action="{{ url_for('train_dataset') }}">
+                <button class="button" type="submit">Retrain Model</button>
+            </form>
+        </div>
+
+        {% if students %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Course / Section</th>
+                            <th>Samples</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                            <tr>
+                                <td>
+                                    <strong>{{ student.full_name }}</strong>
+                                    <span>{{ student.student_number }}</span>
+                                </td>
+                                <td>{{ student.course }} {{ student.year_section }}</td>
+                                <td>{{ student.dataset_samples }}</td>
+                                <td>
+                                    {% if student.dataset_ready %}
+                                        <span class="pill">Ready</span>
+                                    {% else %}
+                                        <span class="pill warning">Needs Samples</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty">Add students first before registering dataset samples.</p>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

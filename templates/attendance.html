@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Face Recognition</p>
+        <h1>Mark Attendance</h1>
+        <p class="muted">Scan a student face with the webcam to record today's attendance.</p>
+    </div>
+</section>
+
+<section class="grid two-columns">
+    <article class="card">
+        <h2>Camera</h2>
+        <div class="camera-panel large">
+            <video id="attendance-video" autoplay playsinline></video>
+            <canvas id="attendance-canvas" class="hidden"></canvas>
+            <div class="camera-actions">
+                <button class="button" type="button" id="start-attendance-camera">Start Camera</button>
+                <button class="button primary" type="button" id="scan-attendance">Scan and Mark Present</button>
+            </div>
+        </div>
+    </article>
+
+    <article class="card">
+        <h2>Recognition Result</h2>
+        <div id="attendance-result" class="result-box">
+            <p class="muted">Start the camera and scan a face to mark attendance.</p>
+        </div>
+    </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

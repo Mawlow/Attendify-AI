@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <p class="eyebrow">Smart Attendance</p>
+        <h1>AI-Based Smart Attendance System</h1>
+        <p class="muted">Enroll students, recognize faces through the webcam, and record attendance in MySQL.</p>
+    </div>
+    <a class="button primary" href="{{ url_for('attendance') }}">Start Attendance</a>
+</section>
+
+<section class="stats-grid">
+    <article class="card stat-card">
+        <span>Total Students</span>
+        <strong>{{ stats.students }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span>Attendance Today</span>
+        <strong>{{ stats.today_attendance }}</strong>
+    </article>
+    <article class="card stat-card">
+        <span>Date</span>
+        <strong>{{ today.strftime("%b %d, %Y") }}</strong>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-heading">
+        <div>
+            <h2>Recent Attendance</h2>
+            <p class="muted">Latest attendance records captured by facial recognition.</p>
+        </div>
+        <a class="button" href="{{ url_for('reports') }}">View Reports</a>
+    </div>
+
+    {% if recent_attendance %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time In</th>
+                        <th>Student</th>
+                        <th>Course / Section</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in recent_attendance %}
+                        <tr>
+                            <td>{{ row.attendance_date }}</td>
+                            <td>{{ row.time_in }}</td>
+                            <td>
+                                <strong>{{ row.full_name }}</strong>
+                                <span>{{ row.student_number }}</span>
+                            </td>
+                            <td>{{ row.course }} {{ row.year_section }}</td>
+                            <td><span class="pill">{{ row.status }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty">No attendance records yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

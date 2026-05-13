@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Edit attendance | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Admin</p>
+        <h1>Edit attendance</h1>
+        <p class="muted">Update this record, or go back to reports without saving.</p>
+    </div>
+    <a class="button" href="{{ url_for('reports', date=return_date) if return_date else url_for('reports') }}">Back to reports</a>
+</section>
+
+<section class="card">
+    <h2>{{ record.full_name }} ({{ record.student_number }})</h2>
+    <form class="form" method="post" action="{{ url_for('edit_attendance', attendance_id=record.id) }}">
+        <input type="hidden" name="return_date" value="{{ return_date }}">
+
+        <label>
+            Student
+            <select name="student_id" required>
+                {% for s in students %}
+                    <option value="{{ s.id }}" {% if s.id == record.student_id %}selected{% endif %}>
+                        {{ s.full_name }} — {{ s.student_number }}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>
+            Date
+            <input type="date" name="attendance_date" required value="{{ record.attendance_date }}">
+        </label>
+
+        <label>
+            Time in
+            <input type="time" name="time_in" required value="{{ time_in_value }}">
+        </label>
+
+        <label>
+            Status
+            <select name="status" required>
+                <option value="Present" {% if record.status == 'Present' %}selected{% endif %}>Present</option>
+                <option value="Late" {% if record.status == 'Late' %}selected{% endif %}>Late</option>
+                <option value="Absent" {% if record.status == 'Absent' %}selected{% endif %}>Absent</option>
+            </select>
+        </label>
+
+        <label>
+            Match score (optional)
+            <input type="number" name="confidence" step="0.01" min="0" placeholder="Leave blank to keep current"
+                value="{{ record.confidence if record.confidence is not none else '' }}">
+        </label>
+        <p class="muted">Recognition distance stored with this row. Leave blank when saving to keep the current value.</p>
+
+        <div class="form-actions">
+            <button class="button primary" type="submit">Update attendance</button>
+            <a class="button" href="{{ url_for('reports', date=return_date) if return_date else url_for('reports') }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

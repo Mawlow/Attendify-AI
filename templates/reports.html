@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Reports | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Records</p>
+        <h1>Attendance Reports</h1>
+        <p class="muted">Review attendance logs stored in MySQL.</p>
+    </div>
+</section>
+
+<section class="card">
+    <form class="filter-form" method="get" action="{{ url_for('reports') }}">
+        <label>
+            Filter by Date
+            <input type="date" name="date" value="{{ selected_date }}">
+        </label>
+        <button class="button primary" type="submit">Apply Filter</button>
+        <a class="button" href="{{ url_for('reports') }}">Clear</a>
+    </form>
+
+    {% if records %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time In</th>
+                        <th>Student</th>
+                        <th>Course / Section</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in records %}
+                        <tr>
+                            <td>{{ row.attendance_date }}</td>
+                            <td>{{ row.time_in }}</td>
+                            <td>
+                                <strong>{{ row.full_name }}</strong>
+                                <span>{{ row.student_number }}</span>
+                            </td>
+                            <td>{{ row.course }} {{ row.year_section }}</td>
+                            <td><span class="pill">{{ row.status }}</span></td>
+                            <td class="table-actions">
+                                <a class="button" href="{{ url_for('edit_attendance', attendance_id=row.id, date=selected_date) }}">Edit</a>
+                                <form method="post" action="{{ url_for('delete_attendance', attendance_id=row.id) }}" class="inline-form" onsubmit="return confirm('Delete this attendance record? This cannot be undone.');">
+                                    <input type="hidden" name="return_date" value="{{ selected_date }}">
+                                    <button class="link-danger" type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty">No attendance records found.</p>
+    {% endif %}
+</section>
+{% endblock %}
