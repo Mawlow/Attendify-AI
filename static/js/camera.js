@@ -277,10 +277,11 @@ function setupAttendanceCamera() {
             const imageData = captureFrame(video, canvas);
             showResult(result, "info", "<p>Scanning face...</p>");
 
+            const subjectId = scanButton.dataset.subjectId;
             const response = await fetch("/api/attendance/recognize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ image_data: imageData }),
+                body: JSON.stringify({ image_data: imageData, subject_id: subjectId }),
             });
             const data = await response.json();
 

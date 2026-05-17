@@ -1,4 +1,6 @@
 import base64
+import csv
+import io
 import os
 import shutil
 from datetime import date, datetime, time, timedelta
@@ -8,7 +10,7 @@ import cv2
 import mysql.connector
 import numpy as np
 from dotenv import load_dotenv
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
 from mysql.connector import IntegrityError
 
 
@@ -104,6 +106,16 @@ def initialize_database():
         )
         cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS subjects (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                subject_code VARCHAR(50) NOT NULL UNIQUE,
+                subject_name VARCHAR(150) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS attendance (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 student_id INT NOT NULL,
@@ -111,12 +123,16 @@ def initialize_database():
                 time_in TIME NOT NULL,
                 status ENUM('Present', 'Late', 'Absent') NOT NULL DEFAULT 'Present',
                 confidence DECIMAL(8, 2),
+                subject_id INT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_attendance_student
                     FOREIGN KEY (student_id) REFERENCES students(id)
                     ON DELETE CASCADE,
-                CONSTRAINT unique_student_attendance_day
-                    UNIQUE (student_id, attendance_date)
+                CONSTRAINT fk_attendance_subject
+                    FOREIGN KEY (subject_id) REFERENCES subjects(id)
+                    ON DELETE SET NULL,
+                CONSTRAINT unique_student_attendance_subject_day
+                    UNIQUE (student_id, attendance_date, subject_id)
             )
             """
         )
@@ -130,7 +146,65 @@ def get_db_connection():
     return mysql.connector.connect(**get_mysql_config())
 
 
+def _run_migrations():
+    """Apply incremental schema changes; safe to run on every startup."""
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    try:
+        try:
+            cursor.execute(
+                "ALTER TABLE attendance ADD COLUMN subject_id INT DEFAULT NULL AFTER confidence"
+            )
+            connection.commit()
+        except mysql.connector.Error as exc:
+            connection.rollback()
+            if exc.errno != 1060:
+                raise
+
+        try:
+            cursor.execute(
+                """
+                ALTER TABLE attendance
+                ADD CONSTRAINT fk_attendance_subject
+                    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
+                """
+            )
+            connection.commit()
+        except mysql.connector.Error as exc:
+            connection.rollback()
+            # 1061 = duplicate key name, 1826 = duplicate FK name (MySQL 8),
+            # 1005 with errno 121 = duplicate FK name (MySQL 5.7 / XAMPP)
+            if exc.errno not in (1005, 1061, 1826):
+                raise
+
+        try:
+            cursor.execute(
+                "ALTER TABLE attendance DROP INDEX unique_student_attendance_day"
+            )
+            connection.commit()
+        except mysql.connector.Error:
+            connection.rollback()
+
+        try:
+            cursor.execute(
+                """
+                ALTER TABLE attendance
+                ADD CONSTRAINT unique_student_attendance_subject_day
+                    UNIQUE (student_id, attendance_date, subject_id)
+                """
+            )
+            connection.commit()
+        except mysql.connector.Error as exc:
+            connection.rollback()
+            if exc.errno not in (1061, 1826):
+                raise
+    finally:
+        cursor.close()
+        connection.close()
+
+
 initialize_database()
+_run_migrations()
 
 
 def fetch_all(query, params=None):
@@ -331,9 +405,11 @@ def dashboard():
     recent_attendance = fetch_all(
         """
         SELECT a.attendance_date, a.time_in, a.status, a.confidence,
-               s.student_number, s.full_name, s.course, s.year_section
+               s.student_number, s.full_name, s.course, s.year_section,
+               sub.subject_code, sub.subject_name
         FROM attendance a
         JOIN students s ON s.id = a.student_id
+        LEFT JOIN subjects sub ON sub.id = a.subject_id
         ORDER BY a.attendance_date DESC, a.time_in DESC
         LIMIT 10
         """
@@ -438,6 +514,45 @@ def delete_student(student_id):
     return redirect(url_for("students"))
 
 
+@app.route("/subjects", methods=["GET", "POST"])
+def subjects():
+    if request.method == "POST":
+        subject_code = request.form.get("subject_code", "").strip()
+        subject_name = request.form.get("subject_name", "").strip()
+        if not subject_code or not subject_name:
+            flash("Subject code and name are required.", "error")
+            return redirect(url_for("subjects"))
+        try:
+            execute_query(
+                "INSERT INTO subjects (subject_code, subject_name) VALUES (%s, %s)",
+                (subject_code, subject_name),
+            )
+            flash(f"{subject_code} — {subject_name} added.", "success")
+        except IntegrityError:
+            flash("That subject code already exists.", "error")
+        except mysql.connector.Error as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("subjects"))
+
+    all_subjects = fetch_all(
+        "SELECT id, subject_code, subject_name, created_at FROM subjects ORDER BY subject_code"
+    )
+    return render_template("subjects.html", subjects=all_subjects)
+
+
+@app.route("/subjects/<int:subject_id>/delete", methods=["POST"])
+def delete_subject(subject_id):
+    subject = fetch_one(
+        "SELECT subject_code, subject_name FROM subjects WHERE id = %s", (subject_id,)
+    )
+    if not subject:
+        flash("Subject not found.", "error")
+        return redirect(url_for("subjects"))
+    execute_query("DELETE FROM subjects WHERE id = %s", (subject_id,))
+    flash(f"{subject['subject_code']} — {subject['subject_name']} removed.", "success")
+    return redirect(url_for("subjects"))
+
+
 @app.route("/dataset", methods=["GET", "POST"])
 def dataset():
     if request.method == "POST":
@@ -516,12 +631,40 @@ def train_dataset():
 
 @app.route("/attendance")
 def attendance():
-    return render_template("attendance.html")
+    all_subjects = fetch_all(
+        "SELECT id, subject_code, subject_name FROM subjects ORDER BY subject_code"
+    )
+    selected_subject = None
+    subject_id_param = request.args.get("subject_id", "").strip()
+    if subject_id_param and subject_id_param.isdigit():
+        selected_subject = fetch_one(
+            "SELECT id, subject_code, subject_name FROM subjects WHERE id = %s",
+            (int(subject_id_param),),
+        )
+    return render_template(
+        "attendance.html",
+        subjects=all_subjects,
+        selected_subject=selected_subject,
+    )
 
 
 @app.route("/api/attendance/recognize", methods=["POST"])
 def api_recognize_attendance():
     payload = request.get_json(silent=True) or {}
+
+    subject_id_raw = payload.get("subject_id")
+    if not subject_id_raw:
+        return jsonify({"ok": False, "message": "No subject selected for this session."}), 400
+    try:
+        subject_id = int(subject_id_raw)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "message": "Invalid subject."}), 400
+
+    subject = fetch_one(
+        "SELECT id, subject_code, subject_name FROM subjects WHERE id = %s", (subject_id,)
+    )
+    if not subject:
+        return jsonify({"ok": False, "message": "Selected subject no longer exists."}), 404
 
     try:
         image = decode_camera_image(payload.get("image_data", ""))
@@ -545,9 +688,9 @@ def api_recognize_attendance():
             """
             SELECT id, time_in
             FROM attendance
-            WHERE student_id = %s AND attendance_date = %s
+            WHERE student_id = %s AND attendance_date = %s AND subject_id = %s
             """,
-            (student_id, today),
+            (student_id, today, subject_id),
         )
 
         if existing:
@@ -555,7 +698,7 @@ def api_recognize_attendance():
                 {
                     "ok": True,
                     "already_marked": True,
-                    "message": "Attendance was already recorded today.",
+                    "message": "Attendance already recorded today for this subject.",
                     "student": student,
                     "time_in": str(existing["time_in"]),
                     "confidence": round(float(confidence), 2),
@@ -566,10 +709,10 @@ def api_recognize_attendance():
         execute_query(
             """
             INSERT INTO attendance
-                (student_id, attendance_date, time_in, status, confidence)
-            VALUES (%s, %s, %s, %s, %s)
+                (student_id, attendance_date, time_in, status, confidence, subject_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (student_id, today, now, "Present", float(confidence)),
+            (student_id, today, now, "Present", float(confidence), subject_id),
         )
 
         return jsonify(
@@ -586,31 +729,131 @@ def api_recognize_attendance():
         return jsonify({"ok": False, "message": str(exc)}), 400
 
 
+def _build_report_query_parts(selected_date, selected_course, selected_year, selected_subject_id):
+    conditions = []
+    params = []
+    if selected_date:
+        conditions.append("a.attendance_date = %s")
+        params.append(selected_date)
+    if selected_course:
+        conditions.append("s.course = %s")
+        params.append(selected_course)
+    if selected_year:
+        conditions.append("s.year_section = %s")
+        params.append(selected_year)
+    if selected_subject_id and selected_subject_id.isdigit():
+        conditions.append("a.subject_id = %s")
+        params.append(int(selected_subject_id))
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    return where_clause, tuple(params)
+
+
 @app.route("/reports")
 def reports():
     selected_date = request.args.get("date", "").strip()
-    params = []
-    where_clause = ""
+    selected_course = request.args.get("course", "").strip()
+    selected_year = request.args.get("year", "").strip()
+    selected_subject_id = request.args.get("subject_id", "").strip()
 
-    if selected_date:
-        where_clause = "WHERE a.attendance_date = %s"
-        params.append(selected_date)
+    where_clause, params = _build_report_query_parts(
+        selected_date, selected_course, selected_year, selected_subject_id
+    )
 
     records = fetch_all(
         f"""
         SELECT a.id, a.student_id, a.attendance_date, a.time_in, a.status, a.confidence,
-               s.student_number, s.full_name, s.course, s.year_section
+               s.student_number, s.full_name, s.course, s.year_section,
+               sub.subject_code, sub.subject_name
         FROM attendance a
         JOIN students s ON s.id = a.student_id
+        LEFT JOIN subjects sub ON sub.id = a.subject_id
         {where_clause}
         ORDER BY a.attendance_date DESC, a.time_in DESC
         """,
-        tuple(params),
+        params,
+    )
+    courses = fetch_all(
+        "SELECT DISTINCT course FROM students WHERE course IS NOT NULL AND course != '' ORDER BY course"
+    )
+    years = fetch_all(
+        "SELECT DISTINCT year_section FROM students WHERE year_section IS NOT NULL AND year_section != '' ORDER BY year_section"
+    )
+    all_subjects = fetch_all(
+        "SELECT id, subject_code, subject_name FROM subjects ORDER BY subject_code"
     )
     return render_template(
         "reports.html",
         records=records,
         selected_date=selected_date,
+        selected_course=selected_course,
+        selected_year=selected_year,
+        selected_subject_id=selected_subject_id,
+        courses=courses,
+        years=years,
+        subjects=all_subjects,
+    )
+
+
+@app.route("/reports/export")
+def export_reports():
+    selected_date = request.args.get("date", "").strip()
+    selected_course = request.args.get("course", "").strip()
+    selected_year = request.args.get("year", "").strip()
+    selected_subject_id = request.args.get("subject_id", "").strip()
+
+    where_clause, params = _build_report_query_parts(
+        selected_date, selected_course, selected_year, selected_subject_id
+    )
+
+    records = fetch_all(
+        f"""
+        SELECT a.attendance_date, a.time_in, s.student_number, s.full_name,
+               s.course, s.year_section,
+               sub.subject_code, sub.subject_name,
+               a.status, a.confidence
+        FROM attendance a
+        JOIN students s ON s.id = a.student_id
+        LEFT JOIN subjects sub ON sub.id = a.subject_id
+        {where_clause}
+        ORDER BY a.attendance_date DESC, a.time_in DESC
+        """,
+        params,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Date", "Time In", "Student Number", "Full Name",
+        "Course", "Year/Section", "Subject Code", "Subject Name",
+        "Status", "Confidence",
+    ])
+    for row in records:
+        time_val = row["time_in"]
+        if isinstance(time_val, timedelta):
+            total = int(time_val.total_seconds()) % (24 * 3600)
+            h, rem = divmod(total, 3600)
+            m, s = divmod(rem, 60)
+            time_str = f"{h:02d}:{m:02d}:{s:02d}"
+        else:
+            time_str = str(time_val)
+        writer.writerow([
+            row["attendance_date"],
+            time_str,
+            row["student_number"],
+            row["full_name"],
+            row["course"] or "",
+            row["year_section"] or "",
+            row["subject_code"] or "",
+            row["subject_name"] or "",
+            row["status"],
+            row["confidence"] if row["confidence"] is not None else "",
+        ])
+
+    filename = "attendance_report.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Subjects | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Administration</p>
+        <h1>Subjects</h1>
+        <p class="muted">Manage the subjects used when recording attendance sessions.</p>
+    </div>
+</section>
+
+<div class="students-page-stack">
+    <article class="card">
+        <h2>Add Subject</h2>
+        <form class="form" method="post" action="{{ url_for('subjects') }}">
+            <div class="enroll-fields">
+                <label>
+                    Subject Code
+                    <input type="text" name="subject_code" placeholder="e.g. CS101" required maxlength="50">
+                </label>
+                <label>
+                    Subject Name
+                    <input type="text" name="subject_name" placeholder="e.g. Introduction to Computing" required maxlength="150">
+                </label>
+            </div>
+            <div class="form-actions">
+                <button class="button primary" type="submit">Add Subject</button>
+            </div>
+        </form>
+    </article>
+
+    <article class="card">
+        <div class="section-heading">
+            <div>
+                <h2>All Subjects</h2>
+                <p class="muted">{{ subjects|length }} subject{{ 's' if subjects|length != 1 else '' }} registered.</p>
+            </div>
+        </div>
+
+        {% if subjects %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Subject Name</th>
+                            <th>Date Added</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subject in subjects %}
+                            <tr>
+                                <td><strong>{{ subject.subject_code }}</strong></td>
+                                <td>{{ subject.subject_name }}</td>
+                                <td><span>{{ subject.created_at.strftime('%b %d, %Y') if subject.created_at else '—' }}</span></td>
+                                <td class="table-actions">
+                                    <form method="post" action="{{ url_for('delete_subject', subject_id=subject.id) }}" class="inline-form" onsubmit="return confirm('Delete {{ subject.subject_code }}? Attendance records for this subject will lose their subject link.');">
+                                        <button class="link-danger" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty">No subjects yet. Add one above.</p>
+        {% endif %}
+    </article>
+</div>
+{% endblock %}

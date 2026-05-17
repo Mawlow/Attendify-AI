@@ -7,30 +7,72 @@
     <div>
         <p class="eyebrow">Face Recognition</p>
         <h1>Mark Attendance</h1>
-        <p class="muted">Scan a student face with the webcam to record today's attendance.</p>
+        <p class="muted">Select a subject, then scan student faces to record today's attendance.</p>
     </div>
 </section>
 
-<section class="grid two-columns">
-    <article class="card">
-        <h2>Camera</h2>
-        <div class="camera-panel large">
-            <video id="attendance-video" autoplay playsinline></video>
-            <canvas id="attendance-canvas" class="hidden"></canvas>
-            <div class="camera-actions">
-                <button class="button" type="button" id="start-attendance-camera">Start Camera</button>
-                <button class="button primary" type="button" id="scan-attendance">Scan and Mark Present</button>
-            </div>
-        </div>
-    </article>
+{% if not selected_subject %}
+    <section class="card">
+        <h2>Select Subject</h2>
+        <p class="muted">Choose the subject for this attendance session before scanning.</p>
 
-    <article class="card">
-        <h2>Recognition Result</h2>
-        <div id="attendance-result" class="result-box">
-            <p class="muted">Start the camera and scan a face to mark attendance.</p>
+        {% if subjects %}
+            <form class="form" method="get" action="{{ url_for('attendance') }}" style="margin-top: 16px;">
+                <label>
+                    Subject
+                    <select name="subject_id" required>
+                        <option value="" disabled selected>— choose a subject —</option>
+                        {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.subject_code }} — {{ subject.subject_name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="form-actions">
+                    <button class="button primary" type="submit">Start Attendance</button>
+                </div>
+            </form>
+        {% else %}
+            <p class="empty" style="margin-top: 16px;">
+                No subjects have been added yet.
+                <a href="{{ url_for('subjects') }}" style="color: var(--primary); text-decoration: underline;">Go to Subjects</a>
+                to add one first.
+            </p>
+        {% endif %}
+    </section>
+{% else %}
+    <section class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <p class="eyebrow" style="margin-bottom: 4px;">Active Session</p>
+                <p style="margin: 0; font-weight: 800; font-size: 1.1rem;">
+                    {{ selected_subject.subject_code }} — {{ selected_subject.subject_name }}
+                </p>
+            </div>
+            <a href="{{ url_for('attendance') }}" class="button">Change Subject</a>
         </div>
-    </article>
-</section>
+    </section>
+
+    <section class="grid two-columns">
+        <article class="card">
+            <h2>Camera</h2>
+            <div class="camera-panel large">
+                <video id="attendance-video" autoplay playsinline></video>
+                <canvas id="attendance-canvas" class="hidden"></canvas>
+                <div class="camera-actions">
+                    <button class="button" type="button" id="start-attendance-camera">Start Camera</button>
+                    <button class="button primary" type="button" id="scan-attendance" data-subject-id="{{ selected_subject.id }}">Scan and Mark Present</button>
+                </div>
+            </div>
+        </article>
+
+        <article class="card">
+            <h2>Recognition Result</h2>
+            <div id="attendance-result" class="result-box">
+                <p class="muted">Start the camera and scan a face to mark attendance.</p>
+            </div>
+        </article>
+    </section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

@@ -45,6 +45,7 @@
                         <th>Time In</th>
                         <th>Student</th>
                         <th>Course / Section</th>
+                        <th>Subject</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -58,6 +59,14 @@
                                 <span>{{ row.student_number }}</span>
                             </td>
                             <td>{{ row.course }} {{ row.year_section }}</td>
+                            <td>
+                                {% if row.subject_code %}
+                                    <strong>{{ row.subject_code }}</strong>
+                                    <span>{{ row.subject_name }}</span>
+                                {% else %}
+                                    <span>—</span>
+                                {% endif %}
+                            </td>
                             <td><span class="pill">{{ row.status }}</span></td>
                         </tr>
                     {% endfor %}

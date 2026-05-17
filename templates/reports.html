@@ -7,18 +7,46 @@
     <div>
         <p class="eyebrow">Records</p>
         <h1>Attendance Reports</h1>
-        <p class="muted">Review attendance logs stored in MySQL.</p>
+        <p class="muted">Review, filter, and export attendance logs stored in MySQL.</p>
     </div>
 </section>
 
 <section class="card">
     <form class="filter-form" method="get" action="{{ url_for('reports') }}">
         <label>
-            Filter by Date
+            Date
             <input type="date" name="date" value="{{ selected_date }}">
+        </label>
+        <label>
+            Course
+            <select name="course">
+                <option value="">All Courses</option>
+                {% for c in courses %}
+                    <option value="{{ c.course }}" {% if c.course == selected_course %}selected{% endif %}>{{ c.course }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Year / Section
+            <select name="year">
+                <option value="">All Years</option>
+                {% for y in years %}
+                    <option value="{{ y.year_section }}" {% if y.year_section == selected_year %}selected{% endif %}>{{ y.year_section }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            Subject
+            <select name="subject_id">
+                <option value="">All Subjects</option>
+                {% for subject in subjects %}
+                    <option value="{{ subject.id }}" {% if subject.id|string == selected_subject_id %}selected{% endif %}>{{ subject.subject_code }} — {{ subject.subject_name }}</option>
+                {% endfor %}
+            </select>
         </label>
         <button class="button primary" type="submit">Apply Filter</button>
         <a class="button" href="{{ url_for('reports') }}">Clear</a>
+        <a class="button" href="{{ url_for('export_reports', date=selected_date, course=selected_course, year=selected_year, subject_id=selected_subject_id) }}">Export CSV</a>
     </form>
 
     {% if records %}
@@ -30,6 +58,7 @@
                         <th>Time In</th>
                         <th>Student</th>
                         <th>Course / Section</th>
+                        <th>Subject</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -44,6 +73,14 @@
                                 <span>{{ row.student_number }}</span>
                             </td>
                             <td>{{ row.course }} {{ row.year_section }}</td>
+                            <td>
+                                {% if row.subject_code %}
+                                    <strong>{{ row.subject_code }}</strong>
+                                    <span>{{ row.subject_name }}</span>
+                                {% else %}
+                                    <span>—</span>
+                                {% endif %}
+                            </td>
                             <td><span class="pill">{{ row.status }}</span></td>
                             <td class="table-actions">
                                 <a class="button" href="{{ url_for('edit_attendance', attendance_id=row.id, date=selected_date) }}">Edit</a>
