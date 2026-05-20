@@ -7,11 +7,13 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import cv2
+from functools import wraps
 import mysql.connector
 import numpy as np
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
 from mysql.connector import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 load_dotenv()
@@ -27,6 +29,8 @@ FACE_SIZE = (200, 200)
 # (e.g. 55–65) if the real student is often rejected; lower for stricter checks.
 RECOGNITION_THRESHOLD = float(os.getenv("FACE_RECOGNITION_THRESHOLD", "50"))
 DB_NAME = os.getenv("DB_NAME", "attendify_ai").strip()
+TEACHER_USERNAME = os.getenv("TEACHER_USERNAME", "teacher")
+TEACHER_PASSWORD = os.getenv("TEACHER_PASSWORD", "teacher123")
 
 # Order of face captures during student enrollment (must match the form and UI).
 ENROLLMENT_POSE_ORDER = ("front", "left", "right", "down", "up")
@@ -197,6 +201,26 @@ def _run_migrations():
         except mysql.connector.Error as exc:
             connection.rollback()
             if exc.errno not in (1061, 1826):
+                raise
+
+        try:
+            cursor.execute(
+                "ALTER TABLE students ADD COLUMN username VARCHAR(100) UNIQUE NULL AFTER email"
+            )
+            connection.commit()
+        except mysql.connector.Error as exc:
+            connection.rollback()
+            if exc.errno != 1060:
+                raise
+
+        try:
+            cursor.execute(
+                "ALTER TABLE students ADD COLUMN password_hash VARCHAR(255) NULL AFTER username"
+            )
+            connection.commit()
+        except mysql.connector.Error as exc:
+            connection.rollback()
+            if exc.errno != 1060:
                 raise
     finally:
         cursor.close()
@@ -392,7 +416,263 @@ def recognize_student(image):
     return student_id, float(distance), None
 
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "role" not in session:
+            flash("Please log in to continue.", "error")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def teacher_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "role" not in session:
+            flash("Please log in to continue.", "error")
+            return redirect(url_for("login"))
+        if session.get("role") != "teacher":
+            flash("Access denied. Teacher login required.", "error")
+            return redirect(url_for("attendance"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "role" in session:
+        return redirect(url_for("dashboard") if session["role"] == "teacher" else url_for("attendance"))
+
+    if request.method == "POST":
+        role = request.form.get("role", "").strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if not role:
+            flash("Please select a role before signing in.", "error")
+        elif not username or not password:
+            flash("Username and password are required.", "error")
+        elif role == "teacher":
+            if username == TEACHER_USERNAME and password == TEACHER_PASSWORD:
+                session["role"] = "teacher"
+                session["display_name"] = username
+                flash("Logged in as Teacher.", "success")
+                return redirect(url_for("dashboard"))
+            else:
+                flash("Invalid username or password.", "error")
+        elif role == "student":
+            student = fetch_one(
+                "SELECT id, full_name, password_hash FROM students WHERE username = %s",
+                (username,),
+            )
+            if student and student.get("password_hash") and check_password_hash(student["password_hash"], password):
+                session["role"] = "student"
+                session["student_id"] = student["id"]
+                session["display_name"] = student["full_name"]
+                flash(f"Welcome, {student['full_name']}!", "success")
+                return redirect(url_for("attendance"))
+            else:
+                flash("Invalid username or password.", "error")
+        else:
+            flash("Invalid role selected.", "error")
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if "role" in session:
+        return redirect(url_for("attendance"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        student_number = request.form.get("student_number", "").strip()
+        full_name = request.form.get("full_name", "").strip()
+        course = request.form.get("course", "").strip()
+        year_section = request.form.get("year_section", "").strip()
+        email = request.form.get("email", "").strip()
+
+        if not username or not password or not student_number or not full_name:
+            flash("Username, password, student number, and full name are required.", "error")
+            return redirect(url_for("register"))
+
+        if password != confirm_password:
+            flash("Passwords do not match.", "error")
+            return redirect(url_for("register"))
+
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "error")
+            return redirect(url_for("register"))
+
+        try:
+            pose_faces = []
+            for pose_key in ENROLLMENT_POSE_ORDER:
+                field_name = f"image_pose_{pose_key}"
+                raw = request.form.get(field_name, "").strip()
+                if not raw:
+                    flash(
+                        "Registration requires all five face poses. Capture front, left, "
+                        "right, look down, and look up before submitting.",
+                        "error",
+                    )
+                    return redirect(url_for("register"))
+                image = decode_camera_image(raw)
+                face = extract_face(image)
+                if face is None and pose_key != "front":
+                    face = extract_face(image, min_neighbors=4, scale_factor=1.05)
+                if face is None:
+                    flash(
+                        f"No face detected for the {enrollment_pose_label(pose_key)} pose. "
+                        "Retake that pose with clearer lighting.",
+                        "error",
+                    )
+                    return redirect(url_for("register"))
+                pose_faces.append(face)
+
+            student_id = execute_query(
+                """
+                INSERT INTO students
+                    (student_number, full_name, course, year_section, email, username, password_hash)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    student_number, full_name, course, year_section, email,
+                    username, generate_password_hash(password),
+                ),
+                return_id=True,
+            )
+
+            first_sample_path = None
+            for face in pose_faces:
+                sample_path = save_face_sample(student_id, face)
+                if first_sample_path is None:
+                    first_sample_path = sample_path
+
+            execute_query(
+                "UPDATE students SET face_image_path = %s WHERE id = %s",
+                (str(first_sample_path.relative_to(BASE_DIR)), student_id),
+            )
+            train_model()
+
+            session["role"] = "student"
+            session["student_id"] = student_id
+            session["display_name"] = full_name
+            flash(f"Account created! Welcome, {full_name}.", "success")
+            return redirect(url_for("attendance"))
+
+        except IntegrityError:
+            flash("That username or student number is already taken.", "error")
+        except (RuntimeError, ValueError, mysql.connector.Error) as exc:
+            flash(str(exc), "error")
+
+        return redirect(url_for("register"))
+
+    return render_template("register.html")
+
+
+@app.route("/my-dataset", methods=["GET", "POST"])
+@login_required
+def my_dataset():
+    if session.get("role") != "student":
+        return redirect(url_for("dataset"))
+
+    student_id = session.get("student_id")
+    student = fetch_one(
+        "SELECT id, student_number, full_name FROM students WHERE id = %s",
+        (student_id,),
+    )
+    if not student:
+        session.clear()
+        flash("Account not found. Please log in again.", "error")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        image_data = request.form.get("image_data", "")
+        try:
+            image = decode_camera_image(image_data)
+            face = extract_face(image)
+            if face is None:
+                flash("No face detected. Try again with better lighting.", "error")
+                return redirect(url_for("my_dataset"))
+            save_face_sample(student_id, face)
+            train_model()
+            total = face_sample_count(student_id)
+            flash(f"Face sample saved! Total samples: {total}.", "success")
+        except (RuntimeError, ValueError, mysql.connector.Error) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("my_dataset"))
+
+    sample_count = face_sample_count(student_id)
+    return render_template("my_dataset.html", student=student, sample_count=sample_count)
+
+
+@app.route("/my-attendance")
+@login_required
+def my_attendance():
+    if session.get("role") != "student":
+        return redirect(url_for("reports"))
+
+    student_id = session.get("student_id")
+    student = fetch_one(
+        "SELECT id, student_number, full_name, course, year_section FROM students WHERE id = %s",
+        (student_id,),
+    )
+    if not student:
+        session.clear()
+        flash("Account not found. Please log in again.", "error")
+        return redirect(url_for("login"))
+
+    selected_date = request.args.get("date", "").strip()
+    selected_subject_id = request.args.get("subject_id", "").strip()
+
+    conditions = ["a.student_id = %s"]
+    params = [student_id]
+
+    if selected_date:
+        conditions.append("a.attendance_date = %s")
+        params.append(selected_date)
+    if selected_subject_id and selected_subject_id.isdigit():
+        conditions.append("a.subject_id = %s")
+        params.append(int(selected_subject_id))
+
+    where_clause = "WHERE " + " AND ".join(conditions)
+
+    records = fetch_all(
+        f"""
+        SELECT a.id, a.attendance_date, a.time_in, a.status, a.confidence,
+               sub.subject_code, sub.subject_name
+        FROM attendance a
+        LEFT JOIN subjects sub ON sub.id = a.subject_id
+        {where_clause}
+        ORDER BY a.attendance_date DESC, a.time_in DESC
+        """,
+        tuple(params),
+    )
+    all_subjects = fetch_all(
+        "SELECT id, subject_code, subject_name FROM subjects ORDER BY subject_code"
+    )
+    return render_template(
+        "my_attendance.html",
+        student=student,
+        records=records,
+        selected_date=selected_date,
+        selected_subject_id=selected_subject_id,
+        subjects=all_subjects,
+    )
+
+
 @app.route("/")
+@teacher_required
 def dashboard():
     today = date.today()
     stats = {
@@ -423,6 +703,7 @@ def dashboard():
 
 
 @app.route("/students", methods=["GET", "POST"])
+@teacher_required
 def students():
     if request.method == "POST":
         student_number = request.form.get("student_number", "").strip()
@@ -501,6 +782,7 @@ def students():
 
 
 @app.route("/students/<int:student_id>/delete", methods=["POST"])
+@teacher_required
 def delete_student(student_id):
     student = fetch_one("SELECT full_name FROM students WHERE id = %s", (student_id,))
     if not student:
@@ -515,6 +797,7 @@ def delete_student(student_id):
 
 
 @app.route("/subjects", methods=["GET", "POST"])
+@teacher_required
 def subjects():
     if request.method == "POST":
         subject_code = request.form.get("subject_code", "").strip()
@@ -541,6 +824,7 @@ def subjects():
 
 
 @app.route("/subjects/<int:subject_id>/delete", methods=["POST"])
+@teacher_required
 def delete_subject(subject_id):
     subject = fetch_one(
         "SELECT subject_code, subject_name FROM subjects WHERE id = %s", (subject_id,)
@@ -554,6 +838,7 @@ def delete_subject(subject_id):
 
 
 @app.route("/dataset", methods=["GET", "POST"])
+@teacher_required
 def dataset():
     if request.method == "POST":
         student_id = request.form.get("student_id", "").strip()
@@ -616,6 +901,7 @@ def dataset():
 
 
 @app.route("/dataset/train", methods=["POST"])
+@teacher_required
 def train_dataset():
     try:
         trained = train_model()
@@ -630,6 +916,7 @@ def train_dataset():
 
 
 @app.route("/attendance")
+@login_required
 def attendance():
     all_subjects = fetch_all(
         "SELECT id, subject_code, subject_name FROM subjects ORDER BY subject_code"
@@ -649,6 +936,7 @@ def attendance():
 
 
 @app.route("/api/attendance/recognize", methods=["POST"])
+@login_required
 def api_recognize_attendance():
     payload = request.get_json(silent=True) or {}
 
@@ -749,6 +1037,7 @@ def _build_report_query_parts(selected_date, selected_course, selected_year, sel
 
 
 @app.route("/reports")
+@teacher_required
 def reports():
     selected_date = request.args.get("date", "").strip()
     selected_course = request.args.get("course", "").strip()
@@ -795,6 +1084,7 @@ def reports():
 
 
 @app.route("/reports/export")
+@teacher_required
 def export_reports():
     selected_date = request.args.get("date", "").strip()
     selected_course = request.args.get("course", "").strip()
@@ -858,6 +1148,7 @@ def export_reports():
 
 
 @app.route("/reports/attendance/<int:attendance_id>/edit", methods=["GET", "POST"])
+@teacher_required
 def edit_attendance(attendance_id):
     record = fetch_one(
         """
@@ -939,6 +1230,7 @@ def edit_attendance(attendance_id):
 
 
 @app.route("/reports/attendance/<int:attendance_id>/delete", methods=["POST"])
+@teacher_required
 def delete_attendance(attendance_id):
     existing = fetch_one("SELECT id FROM attendance WHERE id = %s", (attendance_id,))
     if not existing:

@@ -802,3 +802,218 @@ td span.dataset-count {
         min-height: auto;
     }
 }
+
+/* ── Header extras ────────────────────────────────────────────── */
+
+.header-right {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.role-badge {
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 4px 12px;
+    text-transform: uppercase;
+}
+
+.role-badge-teacher {
+    background: rgba(79, 70, 229, 0.12);
+    color: var(--primary);
+}
+
+.role-badge-student {
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
+}
+
+.button-ghost {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 7px 16px;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.button-ghost:hover {
+    background: var(--error-soft);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+/* ── Login page ───────────────────────────────────────────────── */
+
+.login-body {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+}
+
+.login-wrap {
+    width: 100%;
+    max-width: 480px;
+}
+
+.login-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: clamp(32px, 6vw, 52px);
+}
+
+.login-brand {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 32px;
+}
+
+.login-brand-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.login-title {
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 6px;
+}
+
+.login-subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-bottom: 32px;
+}
+
+.role-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 24px;
+}
+
+.role-card {
+    align-items: center;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font);
+    gap: 10px;
+    padding: 24px 16px;
+    text-align: center;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.role-card:hover {
+    background: var(--card);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow);
+}
+
+.role-card.selected {
+    background: var(--card);
+    box-shadow: var(--shadow);
+}
+
+#btn-student.selected {
+    border-color: var(--accent);
+}
+
+#btn-teacher.selected {
+    border-color: var(--primary);
+}
+
+.role-avatar {
+    align-items: center;
+    border-radius: 50%;
+    display: flex;
+    font-size: 1.4rem;
+    font-weight: 800;
+    height: 56px;
+    justify-content: center;
+    width: 56px;
+}
+
+.student-avatar {
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
+}
+
+.teacher-avatar {
+    background: rgba(79, 70, 229, 0.12);
+    color: var(--primary);
+}
+
+.role-card-label {
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.role-card-desc {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.teacher-fields {
+    margin-bottom: 20px;
+}
+
+.field-label {
+    color: var(--text);
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.login-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.login-submit {
+    width: 100%;
+    justify-content: center;
+    padding: 14px;
+    font-size: 1rem;
+}
+
+.login-register-hint {
+    color: var(--muted);
+    font-size: 0.875rem;
+    margin: 0;
+    text-align: center;
+}
+
+.login-register-hint a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: underline;
+}

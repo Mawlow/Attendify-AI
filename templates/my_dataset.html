@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}My Face Data | Attendify AI{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Face Dataset</p>
+        <h1>My Face Data</h1>
+        <p class="muted">Add more face samples to improve your recognition accuracy. Capture from different angles and lighting conditions.</p>
+    </div>
+</section>
+
+<div class="two-columns">
+    <section class="card">
+        <div class="section-heading" style="margin-bottom: 20px;">
+            <div>
+                <h2>Capture Sample</h2>
+                <p class="muted">{{ student.full_name }} &mdash; {{ student.student_number }}</p>
+            </div>
+        </div>
+
+        <form method="post" action="{{ url_for('my_dataset') }}" id="dataset-form">
+            <input type="hidden" name="image_data" id="dataset-image-data" value="">
+
+            <div class="camera-panel">
+                <video id="dataset-video" autoplay playsinline></video>
+                <canvas id="dataset-canvas" class="hidden"></canvas>
+                <div class="camera-actions">
+                    <button class="button" type="button" id="start-dataset-camera">Start Camera</button>
+                    <button class="button primary" type="button" id="capture-dataset-face">Capture Sample</button>
+                </div>
+                <p class="muted" id="dataset-capture-status">Start the camera and capture a face sample.</p>
+            </div>
+
+            <div style="margin-top: 16px;">
+                <button class="button primary" type="submit">Save Sample</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card" style="align-self: start;">
+        <h2>Sample Count</h2>
+        <div class="stat-card" style="margin-top: 16px; padding: 24px; text-align: center;">
+            <div style="font-size: 3rem; font-weight: 800; color: var(--primary); line-height: 1;">
+                {{ sample_count }}
+            </div>
+            <div style="color: var(--muted); font-size: 0.9rem; margin-top: 8px;">face samples saved</div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            {% if sample_count < 10 %}
+                <div class="flash warning">
+                    You have {{ sample_count }} sample(s). At least 10 are recommended for reliable recognition.
+                </div>
+            {% else %}
+                <div class="flash success">
+                    Great! You have {{ sample_count }} samples. Recognition should work well.
+                </div>
+            {% endif %}
+        </div>
+
+        <div style="margin-top: 16px;">
+            <p class="muted" style="font-size: 0.85rem;">
+                Tips for better recognition:
+            </p>
+            <ul style="color: var(--muted); font-size: 0.85rem; padding-left: 20px; line-height: 2;">
+                <li>Capture from different angles</li>
+                <li>Vary your lighting conditions</li>
+                <li>Include samples with and without glasses</li>
+                <li>Keep your face fully in frame</li>
+            </ul>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

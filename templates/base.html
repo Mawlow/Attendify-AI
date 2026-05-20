@@ -13,18 +13,34 @@
 <body>
     <header class="site-header">
         <div class="site-header-inner">
+            {% if session.get('role') == 'teacher' %}
             <a class="brand" href="{{ url_for('dashboard') }}">
+            {% else %}
+            <a class="brand" href="{{ url_for('attendance') }}">
+            {% endif %}
                 <span class="brand-mark" aria-hidden="true"></span>
                 Attendify AI
             </a>
             <nav class="nav" aria-label="Main">
-                <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('students') }}">Students</a>
-                <a href="{{ url_for('dataset') }}">Dataset</a>
-                <a href="{{ url_for('subjects') }}">Subjects</a>
-                <a href="{{ url_for('attendance') }}">Attendance</a>
-                <a href="{{ url_for('reports') }}">Reports</a>
+                {% if session.get('role') == 'teacher' %}
+                    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                    <a href="{{ url_for('students') }}">Students</a>
+                    <a href="{{ url_for('dataset') }}">Dataset</a>
+                    <a href="{{ url_for('subjects') }}">Subjects</a>
+                    <a href="{{ url_for('attendance') }}">Attendance</a>
+                    <a href="{{ url_for('reports') }}">Reports</a>
+                {% else %}
+                    <a href="{{ url_for('attendance') }}">Attendance</a>
+                    <a href="{{ url_for('my_attendance') }}">My Attendance</a>
+                    <a href="{{ url_for('my_dataset') }}">My Face Data</a>
+                {% endif %}
             </nav>
+            <div class="header-right">
+                <span class="role-badge role-badge-{{ session.get('role', 'guest') }}">
+                    {{ session.get('display_name', session.get('role', 'guest')|capitalize) }}
+                </span>
+                <a href="{{ url_for('logout') }}" class="button button-ghost logout-btn">Log out</a>
+            </div>
         </div>
     </header>
 

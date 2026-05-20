@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f172a">
+    <title>Login — Attendify AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-body">
+
+    <div class="login-wrap">
+        <div class="login-card">
+            <div class="login-brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <span class="login-brand-name">Attendify AI</span>
+            </div>
+
+            <h1 class="login-title">Welcome Back</h1>
+            <p class="login-subtitle">Select your role to sign in</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-stack" style="margin-bottom: 20px;">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('login') }}" id="login-form">
+                <input type="hidden" name="role" id="role-input" value="">
+
+                <div class="role-grid">
+                    <button type="button" class="role-card" id="btn-student" onclick="selectRole('student')">
+                        <div class="role-avatar student-avatar">S</div>
+                        <div class="role-card-label">Student</div>
+                        <div class="role-card-desc">Attendance &amp; Face Data</div>
+                    </button>
+
+                    <button type="button" class="role-card" id="btn-teacher" onclick="selectRole('teacher')">
+                        <div class="role-avatar teacher-avatar">T</div>
+                        <div class="role-card-label">Teacher</div>
+                        <div class="role-card-desc">Full Access</div>
+                    </button>
+                </div>
+
+                <div id="login-fields" class="login-fields" style="display: none;">
+                    <div class="form-field">
+                        <label class="field-label" for="username">Username</label>
+                        <input
+                            type="text"
+                            name="username"
+                            id="username"
+                            class="input"
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                        >
+                    </div>
+                    <div class="form-field">
+                        <label class="field-label" for="password">Password</label>
+                        <input
+                            type="password"
+                            name="password"
+                            id="password"
+                            class="input"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                        >
+                    </div>
+
+                    <button type="submit" class="button button-primary login-submit">
+                        Sign In
+                    </button>
+
+                    <p id="register-link" class="login-register-hint" style="display: none;">
+                        Don't have an account?
+                        <a href="{{ url_for('register') }}">Register here</a>
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function selectRole(role) {
+            document.getElementById('role-input').value = role;
+
+            document.querySelectorAll('.role-card').forEach(function(card) {
+                card.classList.remove('selected');
+            });
+            document.getElementById('btn-' + role).classList.add('selected');
+
+            document.getElementById('login-fields').style.display = 'block';
+
+            var registerLink = document.getElementById('register-link');
+            registerLink.style.display = role === 'student' ? 'block' : 'none';
+
+            setTimeout(function() {
+                document.getElementById('username').focus();
+            }, 50);
+        }
+    </script>
+</body>
+</html>

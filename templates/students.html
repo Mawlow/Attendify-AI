@@ -115,9 +115,11 @@
                                 </td>
                                 <td>{{ student.email }}</td>
                                 <td>
+                                    {% if session.get('role') == 'teacher' %}
                                     <form method="post" action="{{ url_for('delete_student', student_id=student.id) }}" onsubmit="return confirm('Delete this student?');">
                                         <button class="link-danger" type="submit">Delete</button>
                                     </form>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
